@@ -27,10 +27,10 @@ public class SimpleTest {
 			e.printStackTrace();
 			fail();
 		} catch (MalformedWavFileException e) {
-			e.printErrorMessage();
+			System.err.println(e.getMessage());
 			fail();
 		} catch (AudioFormatException e) {
-			e.printErrorMessage();
+			System.err.println(e.getMessage());
 			fail();
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -75,6 +75,7 @@ public class SimpleTest {
 			fail();
 		} catch (MalformedWavFileException e) {
 			// Success
+			System.err.println(e.getMessage());
 			return;
 		} catch (AudioFormatException e) {
 			fail();

@@ -30,39 +30,50 @@ public class Wav {
 	private final static String ID_FMT = "fmt ";
 	private final static String ID_DATA = "data";
 
-	// Riff Chunk Variables
-	String riffChunkId;
-	int riffChunkSize;
-	String riffFormat;
+	public class RiffDescriptor {
+		public String chunkId;
+		public int chunkSize;
+		public String format;
+	}
+	public RiffDescriptor riffDescriptor;
 
-	// FMT Chunk Variables
-	String fmtChunkId;
-	int fmtChunkSize;
-	int fmtAudioFormat;
-	int fmtChannels;
-	int fmtSampleRate;
-	int fmtByteRate;
-	short fmtBlockAlign;
-	short fmtBitsPerSample;
+	public class FmtDescriptor {
+		public String chunkId;
+		public int chunkSize;
+		public int audioFormat;
+		public int channels;
+		public int sampleRate;
+		public int byteRate;
+		public short blockAlign;
+		public short bitsPerSample;
+	}
+	public FmtDescriptor fmtDescriptor;
 
-	// Data Chunk Variables
-	String dataChunkId;
-	long dataChunkSize;
+	public class DataDescriptor {
+		public String chunkId;
+		public long chunkSize;
+	}
+	public DataDescriptor dataDescriptor;
 
 	// Holds the actual byte data
-	byte[] byteData;
+	public byte[] byteData;
 
 	// Only set if fmtBitsPerSample == 16
-	short[] shortData;
+	public short[] shortData;
 
 	// Only set if fmtBitsPerSample == 32
-	int[] intData;
+	public int[] intData;
 
-	public Wav() {};
+	public Wav() {
+		riffDescriptor = new RiffDescriptor();
+		fmtDescriptor = new FmtDescriptor();
+		dataDescriptor = new DataDescriptor();
+	};
 
 	public void readFile(File file) throws IOException, FileNotFoundException,
 			MalformedWavFileException, AudioFormatException {
 
+		// Stream that interfaces with the file.
 		DataInputStream inStream = null;
 
 		// Temporary storage of byte data from file as it is converted to the proper type.
@@ -79,18 +90,18 @@ public class Wav {
 			// Read the RIFF chunk.
 
 			inStream.read(tmpString);
-			riffChunkId = ByteUtils.byteArrayToString(tmpString);
-			if (!ID_RIFF.equals(riffChunkId)) {
+			riffDescriptor.chunkId = ByteUtils.byteArrayToString(tmpString);
+			if (!ID_RIFF.equals(riffDescriptor.chunkId)) {
 				throw new MalformedWavFileException("bytes 0-3 of file did not contain \"Riff\"",
 						MalformedWavFileException.ERROR_RIFF);
 			}
 
 			inStream.read(tmpInt);
-			riffChunkSize = ByteUtils.byteArrayToInt(tmpInt);
+			riffDescriptor.chunkSize = ByteUtils.byteArrayToInt(tmpInt);
 
 			inStream.read(tmpString);
-			riffFormat = ByteUtils.byteArrayToString(tmpString);
-			if (!ID_WAVE.equals(riffFormat)) {
+			riffDescriptor.format = ByteUtils.byteArrayToString(tmpString);
+			if (!ID_WAVE.equals(riffDescriptor.format)) {
 				throw new MalformedWavFileException("bytes 5-8 of file did not contain \"WAVE\"",
 						MalformedWavFileException.ERROR_WAVE);
 			}
@@ -98,62 +109,62 @@ public class Wav {
 			// Read the FMT chunk.
 
 			inStream.read(tmpString);
-			fmtChunkId = ByteUtils.byteArrayToString(tmpString);
-			if (!ID_FMT.equals(fmtChunkId)) {
+			fmtDescriptor.chunkId = ByteUtils.byteArrayToString(tmpString);
+			if (!ID_FMT.equals(fmtDescriptor.chunkId)) {
 				throw new MalformedWavFileException("bytes 9-12 of file did not contain \"fmt \"",
 						MalformedWavFileException.ERROR_FMT);
 			}
 
 			inStream.read(tmpInt);
-			fmtChunkSize = ByteUtils.byteArrayToInt(tmpInt);
+			fmtDescriptor.chunkSize = ByteUtils.byteArrayToInt(tmpInt);
 
 			inStream.read(tmpShort);
-			fmtAudioFormat = ByteUtils.byteArrayToShort(tmpShort);
-			if (fmtAudioFormat != FORMAT_PCM) {
+			fmtDescriptor.audioFormat = ByteUtils.byteArrayToShort(tmpShort);
+			if (fmtDescriptor.audioFormat != FORMAT_PCM) {
 				throw new AudioFormatException("Cannot handle compressed audio at this time.",
 						AudioFormatException.ERROR_COMPRESSED_AUDIO);
 			}
 
 			inStream.read(tmpShort);
-			fmtChannels = ByteUtils.byteArrayToShort(tmpShort);
+			fmtDescriptor.channels = ByteUtils.byteArrayToShort(tmpShort);
 
 			inStream.read(tmpInt);
-			fmtSampleRate = ByteUtils.byteArrayToInt(tmpInt);
+			fmtDescriptor.sampleRate = ByteUtils.byteArrayToInt(tmpInt);
 
 			inStream.read(tmpInt);
-			fmtByteRate = ByteUtils.byteArrayToInt(tmpInt);
+			fmtDescriptor.byteRate = ByteUtils.byteArrayToInt(tmpInt);
 
 			inStream.read(tmpShort);
-			fmtBlockAlign = ByteUtils.byteArrayToShort(tmpShort);
+			fmtDescriptor.blockAlign = ByteUtils.byteArrayToShort(tmpShort);
 
 			inStream.read(tmpShort);
-			fmtBitsPerSample = ByteUtils.byteArrayToShort(tmpShort);
+			fmtDescriptor.bitsPerSample = ByteUtils.byteArrayToShort(tmpShort);
 
 			// Read the Data chunk.
 
 			inStream.read(tmpString);
-			dataChunkId = ByteUtils.byteArrayToString(tmpString);
-			if (!ID_DATA.equals(dataChunkId)) {
+			dataDescriptor.chunkId = ByteUtils.byteArrayToString(tmpString);
+			if (!ID_DATA.equals(dataDescriptor.chunkId)) {
 				throw new MalformedWavFileException("bytes 36-39 did not contain " + ID_DATA,
 						MalformedWavFileException.ERROR_DATA);
 			}
 
 			inStream.read(tmpLong);
-			dataChunkSize = ByteUtils.byteArrayToLong(tmpLong);
+			dataDescriptor.chunkSize = ByteUtils.byteArrayToLong(tmpLong);
 
-			byteData = new byte[(int)dataChunkSize];
+			byteData = new byte[(int)dataDescriptor.chunkSize];
 
 			inStream.read(byteData);
 
 			// Convert byte data to short or int (if necessary).
 
-			if (fmtBitsPerSample == 16) {
+			if (fmtDescriptor.bitsPerSample == 16) {
 				// the data needs to be interpreted as shorts
 				shortData = new short[byteData.length / 2];
 				ByteBuffer.wrap(byteData)
 					.order(ByteOrder.LITTLE_ENDIAN)
 					.asShortBuffer().get(shortData);
-			} else if (fmtBitsPerSample == 32) {
+			} else if (fmtDescriptor.bitsPerSample == 32) {
 				// the data needs to be interpreted as ints
 				intData = new int[byteData.length / 4];
 				ByteBuffer.wrap(byteData)
@@ -171,23 +182,23 @@ public class Wav {
 	public void printHeader(PrintStream stream) {
 
 		// Print RIFF Header
-		stream.println("___" + this.riffChunkId + "___");
-		stream.println("Chunk size: " + this.riffChunkSize);
-		stream.println("Format: " + this.riffFormat);
+		stream.println("___" + riffDescriptor.chunkId + "___");
+		stream.println("Chunk size: " + riffDescriptor.chunkSize);
+		stream.println("Format: " + riffDescriptor.format);
 
 		// Print FMT Header
-		stream.println("___" + this.fmtChunkId + "___");
-		stream.println("Chunk size: " + this.fmtChunkSize);
-		stream.println("Audio format: " + this.fmtAudioFormat);
-		stream.println("Channels: " + this.fmtChannels);
-		stream.println("Sample rate: " + this.fmtSampleRate);
-		stream.println("Byte rate: " + this.fmtByteRate);
-		stream.println("Block align: " + this.fmtBlockAlign);
-		stream.println("Bits per sample: " + this.fmtBitsPerSample);
+		stream.println("___" + fmtDescriptor.chunkId + "___");
+		stream.println("Chunk size: " + fmtDescriptor.chunkSize);
+		stream.println("Audio format: " + fmtDescriptor.audioFormat);
+		stream.println("Channels: " + fmtDescriptor.channels);
+		stream.println("Sample rate: " + fmtDescriptor.sampleRate);
+		stream.println("Byte rate: " + fmtDescriptor.byteRate);
+		stream.println("Block align: " + fmtDescriptor.blockAlign);
+		stream.println("Bits per sample: " + fmtDescriptor.bitsPerSample);
 
 		// Print Data Header
-		stream.println("___" + this.dataChunkId + "___");
-		stream.println("Data size: " + this.dataChunkSize);
+		stream.println("___" + dataDescriptor.chunkId + "___");
+		stream.println("Data size: " + dataDescriptor.chunkSize);
 	}
 
 	class WavException extends Exception {
@@ -202,8 +213,9 @@ public class Wav {
 			this.errorCode = errorCode;
 		}
 
-		public void printErrorMessage() {
-			System.err.println(errorMsg);
+		@Override
+		public String getMessage() {
+			return errorMsg;
 		}
 
 		public int getErrorCode() {
