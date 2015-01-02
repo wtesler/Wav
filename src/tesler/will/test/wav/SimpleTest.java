@@ -2,20 +2,25 @@ package tesler.will.test.wav;
 
 import static org.junit.Assert.fail;
 
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
+
+import javax.sound.sampled.AudioFormat;
+
+import org.junit.Assert;
 
 import org.junit.Test;
 
 import tesler.will.wav.Wav;
-import tesler.will.wav.Wav.AudioFormatException;
-import tesler.will.wav.Wav.MalformedWavFileException;
+import tesler.will.wav.Wav.WavException;
 
 public class SimpleTest {
 
 	@Test
-	public void testProperFile() {
+	public void testProperFileRead() {
 
 		File file = new File("res/cat.wav");
 
@@ -23,13 +28,11 @@ public class SimpleTest {
 
 		try {
 			wav.readFile(file);
+			//wav.printHeader(System.out);
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
 			fail();
-		} catch (MalformedWavFileException e) {
-			System.err.println(e.getMessage());
-			fail();
-		} catch (AudioFormatException e) {
+		} catch (WavException e) {
 			System.err.println(e.getMessage());
 			fail();
 		} catch (IOException e) {
@@ -39,7 +42,7 @@ public class SimpleTest {
 	}
 
 	@Test
-	public void testNonexistentFile() {
+	public void testNonexistentFileRead() {
 
 		File file = new File("res/nonexistent.wav");
 
@@ -50,9 +53,7 @@ public class SimpleTest {
 		} catch (FileNotFoundException e) {
 			// Success
 			return;
-		} catch (MalformedWavFileException e) {
-			fail();
-		} catch (AudioFormatException e) {
+		} catch (WavException e) {
 			fail();
 		} catch (IOException e) {
 			fail();
@@ -62,7 +63,7 @@ public class SimpleTest {
 	}
 
 	@Test
-	public void testMalformedWavFile() {
+	public void testMalformedWavFileRead() {
 
 		File file = new File("res/malformed.wav");
 
@@ -73,17 +74,64 @@ public class SimpleTest {
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
 			fail();
-		} catch (MalformedWavFileException e) {
+		} catch (WavException e) {
 			// Success
-			System.err.println(e.getMessage());
-			return;
-		} catch (AudioFormatException e) {
-			fail();
+			if (e.getErrorCode() >= -4 && e.getErrorCode() <= -1) {
+				return;
+			} else {
+				e.printStackTrace();
+				fail();
+			}
 		} catch (IOException e) {
+			e.printStackTrace();
 			fail();
 		}
 
 		fail();
+	}
+
+	@Test
+	public void testSimpleWavFileWriteHeader() {
+
+		Wav wav = new Wav();
+
+		try {
+
+			File testFile = new File("res/simplewritetest.wav");
+
+			DataOutputStream outFile = new DataOutputStream(
+					new FileOutputStream(testFile));
+
+			File catFile = new File("res/cat.wav");
+
+			wav.readFile(catFile);
+
+			String catHeader = wav.getHeader();
+
+			AudioFormat format = new AudioFormat(
+					wav.format.sampleRate,
+					wav.format.bitsPerSample,
+					wav.format.channels,
+					true, false);
+
+			wav.writeHeader(outFile, wav.dataHeader.chunkSize, format);
+
+			wav.readFile(testFile);
+
+			String testHeader = wav.getHeader();
+
+			Assert.assertEquals(catHeader, testHeader);
+
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+			fail();
+		} catch (WavException e) {
+			System.err.println(e.getMessage());
+			fail();
+		} catch (IOException e) {
+			e.printStackTrace();
+			fail();
+		}
 	}
 
 }

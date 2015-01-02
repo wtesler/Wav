@@ -1,13 +1,15 @@
 package tesler.will.wav;
 
 import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.PrintStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+
+import javax.sound.sampled.AudioFormat;
 
 /**
  * Processes WAVE files. <br><br>
@@ -30,14 +32,14 @@ public class Wav {
 	private final static String ID_FMT = "fmt ";
 	private final static String ID_DATA = "data";
 
-	public class RiffDescriptor {
+	public class Riff {
 		public String chunkId;
 		public int chunkSize;
 		public String format;
 	}
-	public RiffDescriptor riffDescriptor;
+	public Riff riff;
 
-	public class FmtDescriptor {
+	public class Format {
 		public String chunkId;
 		public int chunkSize;
 		public int audioFormat;
@@ -47,13 +49,13 @@ public class Wav {
 		public short blockAlign;
 		public short bitsPerSample;
 	}
-	public FmtDescriptor fmtDescriptor;
+	public Format format;
 
-	public class DataDescriptor {
+	public class DataHeader {
 		public String chunkId;
-		public long chunkSize;
+		public int chunkSize;
 	}
-	public DataDescriptor dataDescriptor;
+	public DataHeader dataHeader;
 
 	// Holds the actual byte data
 	public byte[] byteData;
@@ -65,13 +67,12 @@ public class Wav {
 	public int[] intData;
 
 	public Wav() {
-		riffDescriptor = new RiffDescriptor();
-		fmtDescriptor = new FmtDescriptor();
-		dataDescriptor = new DataDescriptor();
+		riff = new Riff();
+		format = new Format();
+		dataHeader = new DataHeader();
 	};
 
-	public void readFile(File file) throws IOException, FileNotFoundException,
-			MalformedWavFileException, AudioFormatException {
+	public void readFile(File file) throws IOException, FileNotFoundException, WavException {
 
 		// Stream that interfaces with the file.
 		DataInputStream inStream = null;
@@ -79,7 +80,6 @@ public class Wav {
 		// Temporary storage of byte data from file as it is converted to the proper type.
 		byte[] tmpShort = new byte[2];
 		byte[] tmpInt = new byte[4];
-		byte[] tmpLong = new byte[8];
 		byte[] tmpString = new byte[4];
 
 		try {
@@ -90,81 +90,85 @@ public class Wav {
 			// Read the RIFF chunk.
 
 			inStream.read(tmpString);
-			riffDescriptor.chunkId = ByteUtils.byteArrayToString(tmpString);
-			if (!ID_RIFF.equals(riffDescriptor.chunkId)) {
-				throw new MalformedWavFileException("bytes 0-3 of file did not contain \"Riff\"",
-						MalformedWavFileException.ERROR_RIFF);
+			riff.chunkId = ByteUtils.byteArrayToString(tmpString);
+			if (!ID_RIFF.equals(riff.chunkId)) {
+				throw new WavException("bytes 0-3 of file did not contain \"RIFF\","
+						+ "\nInstead, it contained " + riff.chunkId,
+						WavException.ERROR_RIFF);
 			}
 
 			inStream.read(tmpInt);
-			riffDescriptor.chunkSize = ByteUtils.byteArrayToInt(tmpInt);
+			riff.chunkSize = ByteUtils.byteArrayToInt(tmpInt);
 
 			inStream.read(tmpString);
-			riffDescriptor.format = ByteUtils.byteArrayToString(tmpString);
-			if (!ID_WAVE.equals(riffDescriptor.format)) {
-				throw new MalformedWavFileException("bytes 5-8 of file did not contain \"WAVE\"",
-						MalformedWavFileException.ERROR_WAVE);
+			riff.format = ByteUtils.byteArrayToString(tmpString);
+			if (!ID_WAVE.equals(riff.format)) {
+				throw new WavException("bytes 5-8 of file did not contain \"WAVE\","
+						+ "\nInstead, it contained " + riff.format,
+						WavException.ERROR_WAVE);
 			}
 
 			// Read the FMT chunk.
 
 			inStream.read(tmpString);
-			fmtDescriptor.chunkId = ByteUtils.byteArrayToString(tmpString);
-			if (!ID_FMT.equals(fmtDescriptor.chunkId)) {
-				throw new MalformedWavFileException("bytes 9-12 of file did not contain \"fmt \"",
-						MalformedWavFileException.ERROR_FMT);
+			format.chunkId = ByteUtils.byteArrayToString(tmpString);
+			if (!ID_FMT.equals(format.chunkId)) {
+				throw new WavException("bytes 9-12 of file did not contain \"fmt \","
+						+ "\nInstead, it contained " + format.chunkId,
+						WavException.ERROR_FMT);
 			}
 
 			inStream.read(tmpInt);
-			fmtDescriptor.chunkSize = ByteUtils.byteArrayToInt(tmpInt);
+			format.chunkSize = ByteUtils.byteArrayToInt(tmpInt);
 
 			inStream.read(tmpShort);
-			fmtDescriptor.audioFormat = ByteUtils.byteArrayToShort(tmpShort);
-			if (fmtDescriptor.audioFormat != FORMAT_PCM) {
-				throw new AudioFormatException("Cannot handle compressed audio at this time.",
-						AudioFormatException.ERROR_COMPRESSED_AUDIO);
+			format.audioFormat = ByteUtils.byteArrayToShort(tmpShort);
+			if (format.audioFormat != FORMAT_PCM) {
+				throw new WavException("Cannot handle compressed audio at this time.",
+						WavException.ERROR_COMPRESSED_AUDIO);
 			}
 
 			inStream.read(tmpShort);
-			fmtDescriptor.channels = ByteUtils.byteArrayToShort(tmpShort);
+			format.channels = ByteUtils.byteArrayToShort(tmpShort);
 
 			inStream.read(tmpInt);
-			fmtDescriptor.sampleRate = ByteUtils.byteArrayToInt(tmpInt);
+			format.sampleRate = ByteUtils.byteArrayToInt(tmpInt);
 
 			inStream.read(tmpInt);
-			fmtDescriptor.byteRate = ByteUtils.byteArrayToInt(tmpInt);
+			format.byteRate = ByteUtils.byteArrayToInt(tmpInt);
 
 			inStream.read(tmpShort);
-			fmtDescriptor.blockAlign = ByteUtils.byteArrayToShort(tmpShort);
+			format.blockAlign = ByteUtils.byteArrayToShort(tmpShort);
 
 			inStream.read(tmpShort);
-			fmtDescriptor.bitsPerSample = ByteUtils.byteArrayToShort(tmpShort);
+			format.bitsPerSample = ByteUtils.byteArrayToShort(tmpShort);
 
 			// Read the Data chunk.
 
 			inStream.read(tmpString);
-			dataDescriptor.chunkId = ByteUtils.byteArrayToString(tmpString);
-			if (!ID_DATA.equals(dataDescriptor.chunkId)) {
-				throw new MalformedWavFileException("bytes 36-39 did not contain " + ID_DATA,
-						MalformedWavFileException.ERROR_DATA);
+			dataHeader.chunkId = ByteUtils.byteArrayToString(tmpString);
+			if (!ID_DATA.equals(dataHeader.chunkId)) {
+				throw new WavException("bytes 36-39 did not contain " + ID_DATA
+						+ "\nInstead, it contained " + dataHeader.chunkId,
+						WavException.ERROR_DATA);
 			}
 
-			inStream.read(tmpLong);
-			dataDescriptor.chunkSize = ByteUtils.byteArrayToLong(tmpLong);
+			inStream.read(tmpInt);
+			dataHeader.chunkSize = ByteUtils.byteArrayToInt(tmpInt);
 
-			byteData = new byte[(int)dataDescriptor.chunkSize];
+			byteData = new byte[(int)dataHeader.chunkSize];
 
 			inStream.read(byteData);
 
 			// Convert byte data to short or int (if necessary).
 
-			if (fmtDescriptor.bitsPerSample == 16) {
+			if (format.bitsPerSample == 16) {
 				// the data needs to be interpreted as shorts
 				shortData = new short[byteData.length / 2];
 				ByteBuffer.wrap(byteData)
 					.order(ByteOrder.LITTLE_ENDIAN)
 					.asShortBuffer().get(shortData);
-			} else if (fmtDescriptor.bitsPerSample == 32) {
+			} else if (format.bitsPerSample == 32) {
 				// the data needs to be interpreted as ints
 				intData = new int[byteData.length / 4];
 				ByteBuffer.wrap(byteData)
@@ -179,31 +183,110 @@ public class Wav {
 		}
 	}
 
-	public void printHeader(PrintStream stream) {
+	public void writeHeader(DataOutputStream out, int length, AudioFormat format) {
 
-		// Print RIFF Header
-		stream.println("___" + riffDescriptor.chunkId + "___");
-		stream.println("Chunk size: " + riffDescriptor.chunkSize);
-		stream.println("Format: " + riffDescriptor.format);
+		final int HEADER_SIZE = 36;
+		final int SAMPLE_SIZE_IN_BYTES = format.getSampleSizeInBits() / Byte.SIZE;
 
-		// Print FMT Header
-		stream.println("___" + fmtDescriptor.chunkId + "___");
-		stream.println("Chunk size: " + fmtDescriptor.chunkSize);
-		stream.println("Audio format: " + fmtDescriptor.audioFormat);
-		stream.println("Channels: " + fmtDescriptor.channels);
-		stream.println("Sample rate: " + fmtDescriptor.sampleRate);
-		stream.println("Byte rate: " + fmtDescriptor.byteRate);
-		stream.println("Block align: " + fmtDescriptor.blockAlign);
-		stream.println("Bits per sample: " + fmtDescriptor.bitsPerSample);
+		try {
 
-		// Print Data Header
-		stream.println("___" + dataDescriptor.chunkId + "___");
-		stream.println("Data size: " + dataDescriptor.chunkSize);
+			// RIFF CHUNK
+			out.writeBytes(ID_RIFF);
+
+			// Total size of wave file in bytes
+			out.writeInt(Integer.reverseBytes(HEADER_SIZE + length));
+
+			out.writeBytes(ID_WAVE);
+
+			// FMT CHUNK
+			out.writeBytes(ID_FMT);
+
+			// Sample size
+			out.writeInt(Integer.reverseBytes(format.getSampleSizeInBits()));
+
+			// Audio format
+			out.writeShort(Short.reverseBytes((short) FORMAT_PCM));
+
+			// Number of channels
+			out.writeShort(Short.reverseBytes((short) format.getChannels()));
+
+			// Sample rate (hertz)
+			out.writeInt(Integer.reverseBytes((int) format.getSampleRate()));
+
+			// Byte rate
+			out.writeInt(Integer.reverseBytes((int) (
+					format.getSampleRate() * format.getChannels() * SAMPLE_SIZE_IN_BYTES)));
+
+			// Block align
+			out.writeShort(Short.reverseBytes((short) (
+					format.getChannels() * SAMPLE_SIZE_IN_BYTES)));
+
+			// Bits per sample
+			out.writeShort(Short.reverseBytes((short) format.getSampleSizeInBits()));
+
+			// DATA CHUNK
+			out.writeBytes(ID_DATA);
+
+			// Data size
+			out.writeInt(Integer.reverseBytes(length));
+
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 
-	class WavException extends Exception {
+	/**
+	 * @param stream the print stream in which you want to place the generated header.
+	 * Some examples include System.out and null.
+	 * @return The String which was printed (in case you want to use it later).
+	 */
+	public String getHeader() {
+
+		StringBuilder builder = new StringBuilder();
+
+		// Print RIFF Header
+		builder.append("\n___" + riff.chunkId + "___");
+		builder.append("\nChunk size: " + riff.chunkSize);
+		builder.append("\nFormat: " + riff.format);
+
+		// Print FMT Header
+		builder.append("\n___" + format.chunkId + "___");
+		builder.append("\nChunk size: " + format.chunkSize);
+		builder.append("\nAudio format: " + format.audioFormat);
+		builder.append("\nChannels: " + format.channels);
+		builder.append("\nSample rate: " + format.sampleRate);
+		builder.append("\nByte rate: " + format.byteRate);
+		builder.append("\nBlock align: " + format.blockAlign);
+		builder.append("\nBits per sample: " + format.bitsPerSample);
+
+		// Print Data Header
+		builder.append("\n___" + dataHeader.chunkId + "___");
+		builder.append("\nData size: " + dataHeader.chunkSize);
+
+		return builder.toString();
+	}
+
+	public class WavFormat extends AudioFormat {
+
+		public WavFormat(float sampleRate, int sampleSizeInBits, int channels,
+				boolean signed, boolean bigEndian) {
+			super(sampleRate, sampleSizeInBits, channels, signed, bigEndian);
+		}
+
+	}
+
+	public class WavException extends Exception {
 
 		private static final long serialVersionUID = 2321000382825261225L;
+
+		// Malformed Wav Errors
+		public static final int ERROR_RIFF = -1;
+		public static final int ERROR_FMT = -2;
+		public static final int ERROR_WAVE = -3;
+		public static final int ERROR_DATA = -4;
+
+		// Audio Format errors
+		public static final int ERROR_COMPRESSED_AUDIO = -5;
 
 		protected String errorMsg;
 		protected int errorCode;
@@ -222,30 +305,4 @@ public class Wav {
 			return errorCode;
 		}
 	}
-
-	public class MalformedWavFileException extends WavException {
-
-		private static final long serialVersionUID = 1579391781964835824L;
-
-		public static final int ERROR_RIFF = -1;
-		public static final int ERROR_FMT = -2;
-		public static final int ERROR_WAVE = -3;
-		public static final int ERROR_DATA = -4;
-
-		public MalformedWavFileException(String errorMsg, int errorCode) {
-			super(errorMsg, errorCode);
-		}
-	}
-
-	public class AudioFormatException extends WavException {
-
-		private static final long serialVersionUID = 1579391781964835824L;
-
-		public static final int ERROR_COMPRESSED_AUDIO = -1;
-
-		public AudioFormatException(String errorMsg, int errorCode) {
-			super(errorMsg, errorCode);
-		}
-	}
-
 }
