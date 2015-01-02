@@ -22,10 +22,6 @@ import javax.sound.sampled.AudioFormat;
  */
 public class Wav {
 
-	// Only format allowed right now.
-	// All other formats are considered compressed.
-	private final static int FORMAT_PCM = 1;
-
 	// Used to identify different sections of the wave file.
 	private final static String ID_RIFF = "RIFF";
 	private final static String ID_WAVE = "WAVE";
@@ -66,11 +62,51 @@ public class Wav {
 	// Only set if fmtBitsPerSample == 32
 	public int[] intData;
 
+	/**
+	 * Initializes an empty Wav Object.<br>
+	 * Call {@link #readFile(File) readFile} to fill with data.
+	 */
 	public Wav() {
 		riff = new Riff();
 		format = new Format();
 		dataHeader = new DataHeader();
 	};
+
+	/**
+	 * Initializes a Wav Object with the given data.
+	 *
+	 * @param data the PCM data used to initialize the object.
+	 * @param wavFormat a descriptor object with various audio descriptions.
+	 */
+	public Wav(final short[] data, final WavFormat wavFormat) {
+
+		riff = new Riff();
+		format = new Format();
+		dataHeader = new DataHeader();
+
+		format.bitsPerSample = (short) wavFormat.getSampleSizeInBits();
+		final int SAMPLE_SIZE_IN_BYTES = format.bitsPerSample / Byte.SIZE;
+
+		//RIFF
+		riff.chunkId = ID_RIFF;
+		riff.chunkSize = 36 + (data.length * SAMPLE_SIZE_IN_BYTES);
+		riff.format = ID_WAVE;
+
+		//FMT
+		format.chunkId = ID_FMT;
+		format.chunkSize = 16;
+		format.audioFormat = WavFormat.PCM;
+		format.channels = wavFormat.getChannels();
+		format.sampleRate = (int) wavFormat.getSampleRate();
+		format.blockAlign = (short) (format.channels * SAMPLE_SIZE_IN_BYTES);
+		format.byteRate = format.sampleRate * format.blockAlign;
+
+		//Data
+		dataHeader.chunkId = ID_DATA;
+		dataHeader.chunkSize = data.length * SAMPLE_SIZE_IN_BYTES;
+		shortData = data;
+
+	}
 
 	public void readFile(File file) throws IOException, FileNotFoundException, WavException {
 
@@ -123,7 +159,7 @@ public class Wav {
 
 			inStream.read(tmpShort);
 			format.audioFormat = ByteUtils.byteArrayToShort(tmpShort);
-			if (format.audioFormat != FORMAT_PCM) {
+			if (format.audioFormat != WavFormat.PCM) {
 				throw new WavException("Cannot handle compressed audio at this time.",
 						WavException.ERROR_COMPRESSED_AUDIO);
 			}
@@ -156,7 +192,7 @@ public class Wav {
 			inStream.read(tmpInt);
 			dataHeader.chunkSize = ByteUtils.byteArrayToInt(tmpInt);
 
-			byteData = new byte[(int)dataHeader.chunkSize];
+			byteData = new byte[dataHeader.chunkSize];
 
 			inStream.read(byteData);
 
@@ -183,10 +219,10 @@ public class Wav {
 		}
 	}
 
-	public void writeHeader(DataOutputStream out, int length, AudioFormat format) {
+	public void writeFile(DataOutputStream out) {
 
 		final int HEADER_SIZE = 36;
-		final int SAMPLE_SIZE_IN_BYTES = format.getSampleSizeInBits() / Byte.SIZE;
+		final int SAMPLE_SIZE_IN_BYTES = format.bitsPerSample / Byte.SIZE;
 
 		try {
 
@@ -194,7 +230,7 @@ public class Wav {
 			out.writeBytes(ID_RIFF);
 
 			// Total size of wave file in bytes
-			out.writeInt(Integer.reverseBytes(HEADER_SIZE + length));
+			out.writeInt(Integer.reverseBytes(HEADER_SIZE + dataHeader.chunkSize));
 
 			out.writeBytes(ID_WAVE);
 
@@ -202,33 +238,48 @@ public class Wav {
 			out.writeBytes(ID_FMT);
 
 			// Sample size
-			out.writeInt(Integer.reverseBytes(format.getSampleSizeInBits()));
+			out.writeInt(Integer.reverseBytes(format.bitsPerSample));
 
 			// Audio format
-			out.writeShort(Short.reverseBytes((short) FORMAT_PCM));
+			out.writeShort(Short.reverseBytes((short) WavFormat.PCM));
 
 			// Number of channels
-			out.writeShort(Short.reverseBytes((short) format.getChannels()));
+			out.writeShort(Short.reverseBytes((short) format.channels));
 
 			// Sample rate (hertz)
-			out.writeInt(Integer.reverseBytes((int) format.getSampleRate()));
+			out.writeInt(Integer.reverseBytes((int) format.sampleRate));
 
 			// Byte rate
 			out.writeInt(Integer.reverseBytes((int) (
-					format.getSampleRate() * format.getChannels() * SAMPLE_SIZE_IN_BYTES)));
+					format.sampleRate * format.channels * SAMPLE_SIZE_IN_BYTES)));
 
 			// Block align
 			out.writeShort(Short.reverseBytes((short) (
-					format.getChannels() * SAMPLE_SIZE_IN_BYTES)));
+					format.channels * SAMPLE_SIZE_IN_BYTES)));
 
 			// Bits per sample
-			out.writeShort(Short.reverseBytes((short) format.getSampleSizeInBits()));
+			out.writeShort(Short.reverseBytes((short) format.bitsPerSample));
 
 			// DATA CHUNK
 			out.writeBytes(ID_DATA);
 
 			// Data size
-			out.writeInt(Integer.reverseBytes(length));
+			out.writeInt(Integer.reverseBytes(dataHeader.chunkSize));
+
+			// Convert byte data to short or int (if necessary).
+			if (format.bitsPerSample == 8) {
+				out.write(byteData);
+			} else if (format.bitsPerSample == 16) {
+				// the data needs to be interpreted as shorts
+				for (short sample : shortData) {
+					out.write(ByteUtils.shortToByteArray(sample));
+				}
+			} else if (format.bitsPerSample == 32) {
+				// the data needs to be interpreted as ints
+				for (int sample : shortData) {
+					out.write(ByteUtils.intToByteArray(sample));
+				}
+			}
 
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -266,11 +317,15 @@ public class Wav {
 		return builder.toString();
 	}
 
-	public class WavFormat extends AudioFormat {
+	public static class WavFormat extends AudioFormat {
 
-		public WavFormat(float sampleRate, int sampleSizeInBits, int channels,
-				boolean signed, boolean bigEndian) {
-			super(sampleRate, sampleSizeInBits, channels, signed, bigEndian);
+		// Only format allowed right now.
+		// All other formats are considered compressed.
+		public final static int PCM = 1;
+
+		public WavFormat(float sampleRate, int bitsPerSample, int channels,
+				boolean signed) {
+			super(sampleRate, bitsPerSample, channels, signed, false);
 		}
 
 	}
