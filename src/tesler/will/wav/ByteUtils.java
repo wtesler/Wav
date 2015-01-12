@@ -1,5 +1,6 @@
 package tesler.will.wav;
 
+
 public class ByteUtils {
 
 	// these two routines convert a byte array to a unsigned short
@@ -46,17 +47,38 @@ public class ByteUtils {
 		return sBuilder.toString();
 	}
 
-	public static byte[] intToByteArray(int i) {
-		byte[] b = new byte[4];
-		b[0] = (byte) (i & 0x00FF);
-		b[1] = (byte) ((i >> 8) & 0x000000FF);
-		b[2] = (byte) ((i >> 16) & 0x000000FF);
-		b[3] = (byte) ((i >> 24) & 0x000000FF);
-		return b;
+	// convert a short to a byte array
+	public static byte[] shortToByteArray(short sample) {
+		return new byte[] { (byte) (sample & 0xff), (byte) ((sample >>> 8) & 0xff) };
 	}
 
-	// convert a short to a byte array
-	public static byte[] shortToByteArray(short data) {
-		return new byte[] { (byte) (data & 0xff), (byte) ((data >>> 8) & 0xff) };
+	public static byte[] floatToByteArray(Float sample) {
+		return intToByteArray(Float.floatToIntBits(sample));
+	}
+
+	public static byte[] intToByteArray(int bits) {
+		byte[] bytes = new byte[4];
+		bytes[0] = (byte) (bits & 0x00FF);
+		bytes[1] = (byte) ((bits >> 8) & 0x000000FF);
+		bytes[2] = (byte) ((bits >> 16) & 0x000000FF);
+		bytes[3] = (byte) ((bits >> 24) & 0x000000FF);
+		return bytes;
+	}
+
+	public static byte[] doubleToByteArray(Double sample) {
+		return longToByteArray(Double.doubleToLongBits(sample));
+	}
+
+	public static byte[] longToByteArray(long sample) {
+		byte[] bytes = new byte[8];
+		bytes[0] = (byte) (sample & 0x00FF);
+		bytes[1] = (byte) ((sample >> 8) & 0x000000FF);
+		bytes[2] = (byte) ((sample >> 16) & 0x000000FF);
+		bytes[3] = (byte) ((sample >> 24) & 0x000000FF);
+		bytes[4] = (byte) ((sample >> 32) & 0x000000FF);
+		bytes[5] = (byte) ((sample >> 40) & 0x000000FF);
+		bytes[6] = (byte) ((sample >> 48) & 0x000000FF);
+		bytes[7] = (byte) ((sample >> 56) & 0x000000FF);
+		return bytes;
 	}
 }
